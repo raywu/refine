@@ -116,11 +116,19 @@ When iterating on a skill's output quality (not format/structure), use dimension
 7. **Stop when:** all dimensions ≥ threshold (skill-specific) OR 3 iterations without improvement.
 
 **Dual independent scorer (for critical quality gates):**
-- Send identical scoring requests to two independent scorer instances (e.g. separate sessions, separate environments, or different model versions) using the same frozen rubric
-- Average scores across scorers for final comparison — reduces single-scorer bias
+
+*When to run:* The user says "dual-scorer", "PROD gate", "validate before shipping", or similar; OR the current session is validating a Prompt Learning Mode change about to be merged/shipped. Skip for exploratory iteration, format/structure-only changes, and typo fixes.
+
+*The two scorer instances:* Use the two environments in `refine.json` — typically `environments.dev` and `environments.prod`. Send the same scoring request to each using that environment's `command` template. If only one environment is configured, fall back to two separate sessions against the same environment and tell the user dual-environment coverage is unavailable.
+
+*Protocol:*
+- Send identical scoring requests to both scorer instances using the same frozen rubric (e.g. the rubric produced by dimension discovery in Prompt Learning Mode, step 2)
+- Average scores across scorers for each dimension — reduces single-scorer bias
 - Re-state the frozen rubric verbatim in every scoring request (scorers drift to generic dimensions within 1-2 turns)
-- Regression gate (heuristic — tune per skill): no dimension drops more than ~0.5 from baseline average, plus absolute floors (e.g. baseline avg − 1.0, with a minimum of 2.5)
+- Regression gate (heuristic — tune per skill): no dimension drops more than ~0.5 from baseline average, plus absolute floors (e.g. baseline avg − 1.0, with a minimum of 2.5). If scorers disagree on direction (one says win, other says regression), treat as FAIL until the discrepancy is resolved.
 - Caveat: scorers from the same model family can share systematic bias — add periodic human calibration to catch blind spots
+
+*Output:* Present a single table with columns `Dimension | Run A (pre) avg | Run B (post) avg | Δ` (cells already averaged across scorers), a PASS/FAIL verdict, and a one-line note on whether the biggest deltas land on the targeted dimensions.
 
 **Anti-patterns learned from validation:**
 - Agent will drift from its own rubric to generic MBA dimensions (ICP Clarity, Defensibility) — always re-state the rubric when requesting scores
