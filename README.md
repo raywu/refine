@@ -15,20 +15,36 @@ A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) slash command fo
 
 ## Setup
 
-Save `refine.md` from this gist to `~/.claude/commands/refine.md`:
+Install the slash command:
 
 ```bash
 mkdir -p ~/.claude/commands
-# Save refine.md from this gist to ~/.claude/commands/refine.md
+curl -fsSL https://raw.githubusercontent.com/raywu/refine/main/refine.md \
+  -o ~/.claude/commands/refine.md
 ```
 
-Or tell your coding agent: "Save `refine.md` from this gist to `~/.claude/commands/refine.md`, then run `/refine init` in my project."
+Or tell your coding agent: "Install `refine.md` from https://github.com/raywu/refine to `~/.claude/commands/refine.md`, then run `/refine init` in my project."
 
-Then in your project:
-1. Run `/refine init` — it walks you through creating `.claude/refine.json`
-2. Start a session: `/refine why is my skill producing jargon-heavy output?`
+Then in your project, create `.claude/refine.json` via **either**:
 
-Or create `.claude/refine.json` manually (see `refine.example.json`).
+**Interactive (recommended):**
+```
+/refine init
+```
+Walks you through the config and writes it.
+
+**Manual:**
+```bash
+mkdir -p .claude
+curl -fsSL https://raw.githubusercontent.com/raywu/refine/main/refine.example.json \
+  -o .claude/refine.json
+# edit .claude/refine.json to match your environment
+```
+
+Once configured, start a session:
+```
+/refine why is my skill producing jargon-heavy output?
+```
 
 ## Requirements
 
