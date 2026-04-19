@@ -73,3 +73,7 @@ Claude Code sends the symptom to your agent, the agent self-diagnoses from runti
 ## Credits
 
 Prompt Learning Mode is based on [Prompt Learning](https://gist.github.com/milstan/3b12f938f344f4ae1f511dd19e56adce) by [@milstan](https://github.com/milstan).
+
+## License
+
+[MIT](./LICENSE)
