@@ -120,11 +120,21 @@ When iterating on a skill's output quality (not format/structure), use dimension
 *Dependencies (check before running — if any are missing, stop and ask the user):*
 1. A **frozen scoring rubric** — typically the one produced by Prompt Learning Mode's dimension discovery (step 2 above). If no rubric exists, run dimension discovery first, or ask the user to supply one. Do not invent a rubric inside a scoring request.
 2. **Pre- and post-change outputs** to score. Any source works (live skill runs, saved fixtures, pasted text) — dual-scorer does not assume any harness, log file, or repo layout.
-3. **Two scorer endpoints.** Ideally `environments.dev` and `environments.prod` from `refine.json`; see "The two scorer instances" below for the single-environment fallback.
+3. **Two scorer endpoints.** Ideally `environments.dev` and `environments.prod` from `refine.json`; if only one environment (or one model) is available, see "The two scorer instances" below for the tiered fallback ladder — do not silently degrade to same-model-twice.
 
 *When to run:* The user says "dual-scorer", "PROD gate", "validate before shipping", or similar; OR the current session is validating a Prompt Learning Mode change about to be merged/shipped. Skip for exploratory iteration, format/structure-only changes, and typo fixes.
 
-*The two scorer instances:* Use the two environments in `refine.json` — typically `environments.dev` and `environments.prod`. Send the same scoring request to each using that environment's `command` template. If only one environment is configured, fall back to two separate sessions against the same environment and tell the user dual-environment coverage is unavailable.
+*The two scorer instances — pick the strongest tier available:*
+
+Walk the list top-down and stop at the first tier the user's config supports. State which tier you used and what it does/doesn't catch, so the user knows how much weight to give the result.
+
+1. **Two distinct environments** (`environments.dev` + `environments.prod` in `refine.json`, preferably backed by different models or model versions) — full protocol; catches both systematic bias and sampling noise.
+2. **Same environment, two commands pinned to different model versions** — e.g. a second `command` template in the same environment that pins a different model than the primary. Catches family-level bias but not cross-provider bias. Use when the user has only one host configured but multiple models available on it.
+3. **Same environment, two sessions with the same model** — only catches sampling noise, not bias. Use only when the user has no way to vary the model; report clearly that systematic-bias coverage is unavailable.
+4. **Single scorer + human spot-check** — run the single-scorer flow, then ask the user to eyeball the 1–2 dimensions they care about most. Acceptable when the change is small or the user explicitly accepts reduced coverage.
+5. **Skip dual-scorer** — fall back to Prompt Learning Mode's single-scorer flow with an explicit warning that the critical-gate protocol couldn't be met. Appropriate when none of the above are available and the user is willing to proceed without the gate.
+
+If you fall back to tier 3 or weaker, ask the user before proceeding: a weak dual-scorer result can read as a strong signal if the tier isn't disclosed.
 
 *Protocol:*
 - Send identical scoring requests to both scorer instances using the same frozen rubric (e.g. the rubric produced by dimension discovery in Prompt Learning Mode, step 2)
