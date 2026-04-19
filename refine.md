@@ -1,6 +1,6 @@
-# Refinement Session: Provisioner ↔ Agent
+# Refinement Session: Orchestrator ↔ Agent
 
-You are acting as the **provisioner** in a refinement session with an OpenClaw agent. Your job is to collaborate with the agent to diagnose issues and improve skills.
+You are acting as the **orchestrator** in a refinement session with an OpenClaw agent. Your job is to collaborate with the agent to diagnose issues and improve skills.
 
 ## Setup
 
@@ -108,7 +108,7 @@ When a skill produces output that needs quality validation:
 When iterating on a skill's output quality (not format/structure), use dimension-based calibration instead of ad-hoc comparison:
 
 1. **Collect references** — 5+ examples of desired output (seed-data, past approved outputs, gold standards)
-2. **Dimension discovery** — send references to agent: "Analyze these examples. What are the independent quality dimensions? Return as a scored 1-5 rubric with definitions of high vs low." Agent discovers axes the provisioner wouldn't specify.
+2. **Dimension discovery** — send references to agent: "Analyze these examples. What are the independent quality dimensions? Return as a scored 1-5 rubric with definitions of high vs low." Agent discovers axes the orchestrator wouldn't specify.
 3. **Baseline score** — run skill, send output to agent: "Score on each dimension using the rubric you created." **Rubric anchoring:** explicitly reference the rubric from step 2 — agents drift to generic scoring if not reminded.
 4. **Target weakest** — identify bottom 2 dimensions. Propose SKILL.md changes that specifically address those dimensions. One proposal per message.
 5. **Re-score** — run skill again, re-score. Track: iteration number, per-dimension scores, overall score, SKILL.md version hash.

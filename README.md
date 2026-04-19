@@ -4,7 +4,7 @@ A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) slash command fo
 
 ## What it does
 
-`/refine` turns Claude Code into a provisioner that collaborates with your OpenClaw agent to diagnose issues, improve skills, and calibrate output quality. The agent self-diagnoses from runtime experience while Claude Code proposes and validates fixes.
+`/refine` sets up an **agent-agent feedback loop** — Claude Code as the orchestrator, your OpenClaw agent as the runtime expert — to diagnose issues, improve skills, and calibrate output quality. The agent self-diagnoses from runtime experience while Claude Code proposes and validates fixes.
 
 **Includes:**
 - **3-phase lifecycle:** Diagnose → Propose (mandatory agent review) → Present
