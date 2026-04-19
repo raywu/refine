@@ -115,6 +115,13 @@ When iterating on a skill's output quality (not format/structure), use dimension
 6. **Best-of-N** — keep the SKILL.md version with the highest overall score, not the latest. If iteration N scores lower than N-1, revert.
 7. **Stop when:** all dimensions ≥ threshold (skill-specific) OR 3 iterations without improvement.
 
+**Dual independent scorer (cross-environment validation):**
+- For critical quality gates, send identical scoring requests to both DEV and PROD agents with the same frozen rubric
+- Average scores across scorers for final comparison — reduces single-agent bias
+- Re-state the frozen rubric verbatim in every scoring request (agents drift to generic dimensions within 1-2 turns)
+- Gate: no dimension drops > 0.5 from baseline avg, plus absolute floors (baseline avg - 1.0, min 2.5)
+- Caveat: same model family can share systematic bias — add periodic human calibration
+
 **Anti-patterns learned from validation:**
 - Agent will drift from its own rubric to generic MBA dimensions (ICP Clarity, Defensibility) — always re-state the rubric when requesting scores
 - Don't batch dimension discovery + scoring in one message — discovery first, scoring second
