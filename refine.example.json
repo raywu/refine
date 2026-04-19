@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "agent": {
+    "name": "main",
+    "runtime": "openclaw"
+  },
+  "environments": {
+    "dev": {
+      "ssh": "my-server",
+      "port": 19002,
+      "command": "openclaw --profile myproject-dev agent --agent main --message \"$MESSAGE\" --json --timeout 300"
+    },
+    "prod": {
+      "ssh": "my-server",
+      "port": 18791,
+      "command": "openclaw --profile myproject agent --agent main --message \"$MESSAGE\" --json --timeout 300"
+    }
+  },
+  "defaults": {
+    "environment": "dev"
+  },
+  "capabilities": {
+    "sandboxed": true,
+    "dataAccessPattern": "memory_get"
+  }
+}
