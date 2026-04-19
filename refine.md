@@ -117,6 +117,11 @@ When iterating on a skill's output quality (not format/structure), use dimension
 
 **Dual independent scorer (for critical quality gates):**
 
+*Dependencies (check before running — if any are missing, stop and ask the user):*
+1. A **frozen scoring rubric** — typically the one produced by Prompt Learning Mode's dimension discovery (step 2 above). If no rubric exists, run dimension discovery first, or ask the user to supply one. Do not invent a rubric inside a scoring request.
+2. **Pre- and post-change outputs** to score. Any source works (live skill runs, saved fixtures, pasted text) — dual-scorer does not assume any harness, log file, or repo layout.
+3. **Two scorer endpoints.** Ideally `environments.dev` and `environments.prod` from `refine.json`; see "The two scorer instances" below for the single-environment fallback.
+
 *When to run:* The user says "dual-scorer", "PROD gate", "validate before shipping", or similar; OR the current session is validating a Prompt Learning Mode change about to be merged/shipped. Skip for exploratory iteration, format/structure-only changes, and typo fixes.
 
 *The two scorer instances:* Use the two environments in `refine.json` — typically `environments.dev` and `environments.prod`. Send the same scoring request to each using that environment's `command` template. If only one environment is configured, fall back to two separate sessions against the same environment and tell the user dual-environment coverage is unavailable.
