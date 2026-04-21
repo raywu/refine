@@ -8,12 +8,24 @@
     "dev": {
       "ssh": "my-server",
       "port": 19002,
-      "command": "openclaw --profile myproject-dev agent --agent main --message \"$MESSAGE\" --json --timeout 300"
+      "mode": "main",
+      "command": "openclaw --profile myproject-dev agent --agent main --message \"$MESSAGE\" --json --timeout 300",
+      "spawn": {
+        "handlerSkill": "refine-handler",
+        "replyWrapper": "~/.local/bin/refine-reply",
+        "labelTemplate": "refine-{subject}-round{N}-{date}"
+      }
     },
     "prod": {
       "ssh": "my-server",
       "port": 18791,
-      "command": "openclaw --profile myproject agent --agent main --message \"$MESSAGE\" --json --timeout 300"
+      "mode": "main",
+      "command": "openclaw --profile myproject agent --agent main --message \"$MESSAGE\" --json --timeout 300",
+      "spawn": {
+        "handlerSkill": "refine-handler",
+        "replyWrapper": "~/.local/bin/refine-reply",
+        "labelTemplate": "refine-{subject}-round{N}-{date}"
+      }
     }
   },
   "defaults": {

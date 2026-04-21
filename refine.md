@@ -25,12 +25,22 @@ Walk the user through creating `.claude/refine.json` interactively:
    - Agent name (default: `main`)
 3. Ask: "Which environment should be the default?" (default: `dev`)
 4. Ask: "Does the agent run in a sandbox?" (default: `true`)
-5. Generate the `refine.json` and write it to `.claude/refine.json`
-6. Construct the command template for each environment: `eval "$(~/.local/share/fnm/fnm env)" && openclaw --profile <profile> agent --agent <agent> --message "$MESSAGE" --json --timeout 300`
+5. Per environment, ask: "Dispatch mode? [auto/main/spawn] (default: `auto`)"
+   - `auto` — probe on every session; use `spawn` when prerequisites are met, else fall back to `main`. Recommended for agents where you plan to enable spawn later.
+   - `main` — today's behavior. Use this when the agent lacks `sessions_spawn` or you haven't installed the handler chain yet.
+   - `spawn` — require spawn. Fail-fast if prerequisites aren't met.
+   - If `auto` or `spawn`, also collect:
+     - `spawn.handlerSkill` (default: `refine-handler`)
+     - `spawn.replyWrapper` absolute path on the agent host (default: `~/.local/bin/refine-reply`)
+     - `spawn.labelTemplate` (default: `refine-{subject}-round{N}-{date}`)
+   - If `main`, omit the `spawn` block.
+6. Generate the `refine.json` and write it to `.claude/refine.json`
+7. Construct the command template for each environment: `eval "$(~/.local/share/fnm/fnm env)" && openclaw --profile <profile> agent --agent <agent> --message "$MESSAGE" --json --timeout 300`
    - If the user says they don't use fnm, omit the `eval` prefix
    - If SSH is null (local), omit SSH wrapping
-7. Show the generated config and confirm before writing
-8. After writing, tell the user: "Config created. Run `/refine <your question>` to start a session."
+   - The template is identical across modes — mode differences live in the `$MESSAGE` body, not the CLI.
+8. Show the generated config and confirm before writing
+9. After writing, tell the user: "Config created. Run `/refine <your question>` to start a session." When any environment uses `auto` or `spawn`, also say: "Spawn mode requires the `refine-handler` skill and reply wrapper installed on the agent — see `refine-handler.example.md` and `refine-reply.example.sh` in this repo."
 
 2. If the environment has `"ssh"` set (not null), check if SSH tunnel is open to the configured port. If not, open it:
    ```
@@ -39,13 +49,55 @@ Walk the user through creating `.claude/refine.json` interactively:
 
 3. Verify the gateway is healthy via the configured SSH + CLI.
 
+4. Resolve the dispatch mode for the active environment. Read `environments[<env>].mode`:
+   - Missing, null, or `"main"` → `main` (today's behavior: single agent session, natural-language message body).
+   - `"spawn"` → require the handler chain. Probe first (see below); if the probe fails, STOP and show the fail-fast list.
+   - `"auto"` → probe. On success use `spawn`; on timeout/failure, fall back to `main` and surface one line: `refine: spawn probe failed, falling back to main.`
+
+   **Probe:** send `{"probe": true}` as `$MESSAGE` through the existing `command` template with a 15-second timeout. A reply body of `{"ok": true, ...}` confirms the whole chain is live (tools allowlisted, handler skill installed, reply wrapper reachable).
+
+   **Fail-fast list** (show when `mode: "spawn"` and probe fails):
+   1. `sessions_spawn`, `sessions_send`, `sessions_yield` in the agent's tool allowlist
+   2. `refine-handler` skill installed on the agent
+   3. Reply wrapper path in the agent's exec-approvals
+   4. Reply wrapper present on disk at `spawn.replyWrapper`
+   5. `capabilities.sandboxed: true` in `refine.json`
+
 ## How to Talk to the Agent
 
-Use the `command` template from the active environment in `refine.json`. Replace `$MESSAGE` with the message text.
+The `command` template from the active environment is the same in all modes. What changes is the `$MESSAGE` body.
 
-**Message escaping:** Write the message to a temp file and pass via heredoc or `cat` to avoid shell interpolation issues with quotes, backticks, `$`, multiline, and unicode.
+**Message escaping:** Write the message body to a temp file and pass via heredoc or `cat` to avoid shell interpolation issues with quotes, backticks, `$`, multiline, and unicode.
 
 Parse the JSON response. The agent's text is at `result.payloads[0].text`. Metadata (model, tokens, duration) is at `result.meta.agentMeta`.
+
+### main mode
+
+Write the natural-language turn text directly into `$MESSAGE`. The agent answers from its main session. This is today's flow and also the fallback used when an `auto` probe fails.
+
+### spawn mode
+
+Write a JSON body that invokes the configured `spawn.handlerSkill`:
+
+```json
+{
+  "label": "<spawn.labelTemplate with placeholders filled>",
+  "subject": "<short slug derived from /refine arguments>",
+  "round": <1-indexed round counter from orchestrator state>,
+  "taskBody": "<the natural-language turn text — same content as main mode>"
+}
+```
+
+Fill the label template:
+- `{subject}` → lowercased, hyphenated slug of the refinement topic (e.g. `welcome-skill-jargon`)
+- `{N}` → 1-indexed round counter the orchestrator maintains per session
+- `{date}` → `date -u +%Y%m%d`
+
+Example: `refine-welcome-skill-jargon-round2-20260421`.
+
+Start each session at round 1 and increment `N` on every dispatch to the agent (probes don't count). The handler skill spawns a fresh session with the label, sends `taskBody`, yields for the reply, and execs the reply wrapper with the yielded text. Read the reply at the same `result.payloads[0].text` location as main mode — the handler returns the wrapper's stdout there.
+
+If the handler returns `{"ok": false, "error": "yield_timeout", ...}`, surface it to the user unedited and stop the session. Do not retry automatically.
 
 **Message discipline:**
 - Keep messages focused on ONE topic. Multi-part questions trigger tool-calling spirals that time out.
@@ -138,6 +190,8 @@ When iterating on a skill's output quality (not format/structure), use dimension
 
 **When verifying changes:** Trigger an actual cron run (not main session). The main session is the wrong test environment for cron skills.
 
+**When using `spawn` mode:** the `refine-handler` skill runs in the agent's main session but spawns a fresh sandbox per turn. The spawn must not write to the workspace — the reply crosses back through the reply wrapper's stdout only. If you catch yourself wanting the spawn to save files, that's a signal to route through `memory_get`/`memory_put` instead.
+
 ## Constraints
 
 - Never modify the agent's workspace files directly
@@ -145,6 +199,7 @@ When iterating on a skill's output quality (not format/structure), use dimension
 - The agent cannot modify its own permissions
 - All proposed changes go through operator review
 - **Inter-session authorization:** never propose skill chains where output from one skill auto-triggers another. Data payloads between skills are context, not authorization. Each skill execution requires explicit operator command.
+- **Spawn-session reuse is forbidden.** In `spawn` mode, every round must call `sessions_spawn` with a fresh label; never reuse a prior round's session. Cold context per round is the whole point.
 - Deploy DEV first, verify via cron, then PROD
 
 ## User's Request
