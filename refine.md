@@ -13,34 +13,56 @@ You are acting as the **orchestrator** in a refinement session with an OpenClaw 
 
 ### `/refine init` flow
 
-If `.claude/refine.json` already exists, show the current config and ask "Overwrite?" before proceeding. If the user declines, stop.
+Init is **idempotent**. Safe to rerun on fresh projects and on existing `.claude/refine.json` files — use it to upgrade legacy configs onto the spawn-mode schema without wiping customizations.
 
-Walk the user through creating `.claude/refine.json` interactively:
+**Step 0 — detect existing config:**
+- If `.claude/refine.json` exists and parses: load it as the starting point. Tell the user: "Found existing `.claude/refine.json`. Running in upgrade mode — every question below shows your current value as the default (accept to keep, type to change). Unknown fields (e.g. `notes`, custom entries, legacy field positions) are preserved verbatim."
+- If it exists but is malformed JSON: stop, show the parse error, ask the user to fix it first.
+- If it does not exist: run with static defaults only.
 
-1. Ask: "What SSH alias connects to your OpenClaw droplet?" (e.g., `bad`, `myserver`, or `null` for local)
-2. Ask: "What OpenClaw profiles do you use?" Collect for each environment:
-   - Environment name (default: `dev`, `prod`)
-   - Profile name (e.g., `badstartupideas-dev`)
-   - Gateway port (e.g., `19002`)
-   - Agent name (default: `main`)
-3. Ask: "Which environment should be the default?" (default: `dev`)
-4. Ask: "Does the agent run in a sandbox?" (default: `true`)
-5. Per environment, ask: "Dispatch mode? [auto/main/spawn] (default: `auto`)"
-   - `auto` — probe on every session; use `spawn` when prerequisites are met, else fall back to `main`. Recommended for agents where you plan to enable spawn later.
-   - `main` — today's behavior. Use this when the agent lacks `sessions_spawn` or you haven't installed the handler chain yet.
-   - `spawn` — require spawn. Fail-fast if prerequisites aren't met.
-   - If `auto` or `spawn`, also collect:
+**Principle:** only *add* missing fields or *change* fields the user explicitly edits. Never rewrite fields the user didn't touch. Preserve schema quirks (top-level `ssh`, env-level `sandbox`, `notes` blocks, bespoke `command` strings) exactly as found.
+
+**Questions** (existing value as default when present; else the static default in parentheses):
+
+1. "SSH alias to your OpenClaw host?" (`null` for local). Accept either top-level `ssh` or `environments[*].ssh` from an existing file.
+2. "Environments?" For each existing environment key (or a fresh `dev`/`prod` pair on a new file), confirm or update `profile`, `port`, and `agent` (default: `main`). Ask whether to add new environments.
+3. "Default environment?" (default: `dev`)
+4. "Does the agent run in a sandbox?" (default: `true`). Accept either `capabilities.sandboxed` or env-level `sandbox`.
+5. Per environment: "Dispatch mode? [auto/main/spawn]" (default: `auto`)
+   - `auto` — probe the spawn chain each session; use `spawn` on success, fall back to `main` on failure. Recommended for gradual rollout.
+   - `main` — today's behavior, no spawn prerequisites.
+   - `spawn` — require spawn; fail-fast if prerequisites aren't met.
+   - For `auto` or `spawn`, also collect (existing values as defaults):
      - `spawn.handlerSkill` (default: `refine-handler`)
      - `spawn.replyWrapper` absolute path on the agent host (default: `~/.local/bin/refine-reply`)
      - `spawn.labelTemplate` (default: `refine-{subject}-round{N}-{date}`)
-   - If `main`, omit the `spawn` block.
-6. Generate the `refine.json` and write it to `.claude/refine.json`
-7. Construct the command template for each environment: `eval "$(~/.local/share/fnm/fnm env)" && openclaw --profile <profile> agent --agent <agent> --message "$MESSAGE" --json --timeout 300`
-   - If the user says they don't use fnm, omit the `eval` prefix
-   - If SSH is null (local), omit SSH wrapping
-   - The template is identical across modes — mode differences live in the `$MESSAGE` body, not the CLI.
-8. Show the generated config and confirm before writing
-9. After writing, tell the user: "Config created. Run `/refine <your question>` to start a session." When any environment uses `auto` or `spawn`, also say: "Spawn mode requires the `refine-handler` skill and reply wrapper installed on the agent — see `refine-handler.example.md` and `refine-reply.example.sh` in this repo."
+   - Switching from `auto`/`spawn` → `main`: ask before dropping the `spawn` block.
+6. **Commands**: preserve existing `command` strings verbatim. Only construct a template for *newly added* environments, using: `eval "$(~/.local/share/fnm/fnm env)" && openclaw --profile <profile> agent --agent <agent> --message "$MESSAGE" --json --timeout 300`. Drop `eval` if fnm isn't in use; wrap with SSH if the alias is non-null.
+7. **Diff and confirm.** For an existing file, show a unified diff of the planned changes; for a fresh file, show the full contents. Ask "Write this to .claude/refine.json? [Y/n]". On no, stop without writing.
+8. Write `.claude/refine.json`.
+9. **Probe-consent step.** If any environment ended up with `mode: "auto"` or `"spawn"`, ask the user exactly:
+
+   > I can run a probe now against `<default-env>` to verify the spawn chain is live. The probe sends `{"probe": true}` through your configured `command` with a 15-second timeout — one message to your agent, no state changes, read-only from the agent's perspective. Run it? [Y/n]
+
+   - **No** → "Skipped. The first `/refine <question>` will probe automatically. See `refine-handler.example.md` (agent skill) and `refine-reply.example.sh` (reply wrapper) in [the refine repo](https://github.com/raywu/refine) for agent-side install."
+   - **Yes** → run the probe. Report:
+     - **Success**: "Probe OK on `<env>`. Spawn chain is live."
+     - **Failure**: print the annotated remediation (below) and stop.
+10. Final message: "Config ready. Run `/refine <your question>` to start a session."
+
+**Annotated remediation** (shown when the consented probe fails during init). Substitute placeholders with concrete values from the config (`<ssh>`, `<spawn.replyWrapper>`):
+
+1. **Handler skill missing** — install `refine-handler.example.md` into your agent's `skills/` directory (exact path depends on your OpenClaw setup). Fetch: `curl -fsSL https://raw.githubusercontent.com/raywu/refine/main/refine-handler.example.md`.
+2. **Reply wrapper missing** at `<spawn.replyWrapper>` — install `refine-reply.example.sh`:
+   ```
+   curl -fsSL https://raw.githubusercontent.com/raywu/refine/main/refine-reply.example.sh \
+     | ssh <ssh> 'mkdir -p $(dirname <spawn.replyWrapper>) && cat > <spawn.replyWrapper> && chmod +x <spawn.replyWrapper>'
+   ```
+3. **Exec-approvals** — add the absolute path of the reply wrapper on the agent host to the agent's exec-approvals file.
+4. **Tool allowlist** — ensure `sessions_spawn`, `sessions_send`, and `sessions_yield` are enabled for the agent.
+5. **Sandbox capability** — set `capabilities.sandboxed: true` in `refine.json` (legacy env-level `sandbox: true` also accepted).
+
+After fixing the issue(s), tell the user: "Rerun `/refine init` (it's idempotent) or run `/refine <question>` directly — the dispatch will re-probe."
 
 2. If the environment has `"ssh"` set (not null), check if SSH tunnel is open to the configured port. If not, open it:
    ```
