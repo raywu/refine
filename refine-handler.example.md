@@ -14,14 +14,7 @@ When `/refine` runs in `spawn` mode, each refinement turn is routed to this skil
 
 ## Message shapes
 
-The orchestrator sends JSON bodies. Before dispatching, parse the envelope:
-
-1. Strip leading/trailing whitespace.
-2. If the body is wrapped in a single ```` ``` ```` code fence containing only JSON, strip the fence before parsing.
-3. Attempt JSON parse.
-4. If parse fails → reply `{"ok": false, "error": "invalid_json"}`. No natural language.
-
-Once parsed, route by shape:
+The orchestrator sends one of two JSON bodies.
 
 ### 1. Probe
 
@@ -62,30 +55,3 @@ Handle it in this order:
 - **Never** reuse a spawn session across rounds — the orchestrator expects round N to be uncontaminated by round N-1.
 - If `sessions_yield` times out, return a JSON error body: `{ "ok": false, "error": "yield_timeout", "label": "<label>" }`. The orchestrator will surface this to the user without retrying.
 - Labels are opaque to this skill; do not parse or rewrite them.
-
-## Agent-side routing rule (HARD RULE)
-
-The handler skill only fires if the agent actually invokes it. Skill frontmatter/description alone is NOT a hard router — under conversational pressure, `gpt-5.3-codex` and similar models will often read `{"probe": true}` as plain text and reply in natural language, bypassing the skill entirely. The orchestrator then sees an unexpected reply and (in `auto` mode) silently falls back to `main`.
-
-To force deterministic routing, add this HARD RULE to your agent's governing behavior prompt (typically `AGENTS.md`; may be `CLAUDE.md`, a system policy file, or your OpenClaw equivalent). The rule needs to be loaded on every turn.
-
-```markdown
-## /refine message routing (HARD RULE)
-
-The orchestrator-side /refine slash command dispatches JSON-shaped messages that are NOT natural-language questions. This rule has priority over normal conversational behavior.
-
-Envelope parsing:
-1. Strip leading/trailing whitespace from the message body.
-2. If the body is wrapped in a single ```...``` code fence containing only JSON, strip the fence before parsing.
-3. Attempt JSON parse on the remaining content.
-
-Behavior:
-- Parse fails → return `{"ok": false, "error": "invalid_json"}`. No NL.
-- Parse succeeds AND matches `{"probe": true}` → invoke refine-handler Probe section.
-- Parse succeeds AND matches `{"label", "subject", "round", "taskBody"}` → invoke refine-handler Dispatch section: sessions_spawn(label) → sessions_send(taskBody) → sessions_yield → exec refine-reply with yielded text on stdin → return wrapper stdout.
-- Parse succeeds but matches no known shape → return `{"ok": false, "error": "unknown_refine_shape"}`.
-
-If body is valid JSON and matches a known shape, you MUST NOT produce any prose outside the required JSON output. Never fall through to natural-language interpretation.
-```
-
-Symptom of a missing rule: a probe that should return `{"ok": true, ...}` instead returns NL text like `"✅ Alive and responsive."`. The orchestrator cannot apply this edit — the operator must add it to the agent's governing prompt manually. `/refine init` discloses this prerequisite during setup.
