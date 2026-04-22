@@ -28,10 +28,17 @@ Init is **idempotent**. Safe to rerun on fresh projects and on existing `.claude
 2. "Environments?" For each existing environment key (or a fresh `dev`/`prod` pair on a new file), confirm or update `profile`, `port`, and `agent` (default: `main`). Ask whether to add new environments.
 3. "Default environment?" (default: `dev`)
 4. "Does the agent run in a sandbox?" (default: `true`). Accept either `capabilities.sandboxed` or env-level `sandbox`.
-5. Per environment: "Dispatch mode? [auto/main/spawn]" (default: `auto`)
-   - `auto` — probe the spawn chain each session; use `spawn` on success, fall back to `main` on failure. Recommended for gradual rollout.
-   - `main` — today's behavior, no spawn prerequisites.
-   - `spawn` — require spawn; fail-fast if prerequisites aren't met.
+5. Per environment: "Dispatch mode?" (default: `auto`)
+
+   Before asking, briefly orient the user:
+
+   > `mode` controls which session receives each refinement turn.
+   > - **`main`** sends the turn to your agent's existing main session. Zero setup, but refinement reasoning piles up in the session your agent uses for real work, and each round is biased by memory of the previous one.
+   > - **`spawn`** routes each turn through a small `refine-handler` skill on the agent, which spawns a fresh subagent session per round. Cold context every round (reproducible), no pollution of main, no lock contention with concurrent cron activity. Requires a handler skill + reply wrapper installed on the agent — the probe below verifies that chain is live.
+   > - **`auto`** probes at session start; uses `spawn` on success, falls back to `main` otherwise. Good default while you're rolling spawn out.
+
+   Then ask: "Pick `auto`, `main`, or `spawn`."
+
    - For `auto` or `spawn`, also collect (existing values as defaults):
      - `spawn.handlerSkill` (default: `refine-handler`)
      - `spawn.replyWrapper` absolute path on the agent host (default: `~/.local/bin/refine-reply`)
@@ -40,7 +47,11 @@ Init is **idempotent**. Safe to rerun on fresh projects and on existing `.claude
 6. **Commands**: preserve existing `command` strings verbatim. Only construct a template for *newly added* environments, using: `eval "$(~/.local/share/fnm/fnm env)" && openclaw --profile <profile> agent --agent <agent> --message "$MESSAGE" --json --timeout 300`. Drop `eval` if fnm isn't in use; wrap with SSH if the alias is non-null.
 7. **Diff and confirm.** For an existing file, show a unified diff of the planned changes; for a fresh file, show the full contents. Ask "Write this to .claude/refine.json? [Y/n]". On no, stop without writing.
 8. Write `.claude/refine.json`.
-9. **Probe-consent step.** If any environment ended up with `mode: "auto"` or `"spawn"`, ask the user exactly:
+9. **Probe-consent step.** If any environment ended up with `mode: "auto"` or `"spawn"`, first disclose the install scope, then ask for probe consent. Show this disclosure before the probe question:
+
+   > Note: spawn mode has 6 install prerequisites on the agent side, including a routing rule that must be added to your agent's governing behavior prompt (AGENTS.md, CLAUDE.md, system policy file, or equivalent). The orchestrator cannot apply that edit automatically. Symptom of a missing rule: probe returns natural-language text instead of JSON. If the probe fails, you'll see the full remediation list.
+
+   Then ask:
 
    > I can run a probe now against `<default-env>` to verify the spawn chain is live. The probe sends `{"probe": true}` through your configured `command` with a 15-second timeout — one message to your agent, no state changes, read-only from the agent's perspective. Run it? [Y/n]
 
@@ -61,6 +72,7 @@ Init is **idempotent**. Safe to rerun on fresh projects and on existing `.claude
 3. **Exec-approvals** — add the absolute path of the reply wrapper on the agent host to the agent's exec-approvals file.
 4. **Tool allowlist** — ensure `sessions_spawn`, `sessions_send`, and `sessions_yield` are enabled for the agent.
 5. **Sandbox capability** — set `capabilities.sandboxed: true` in `refine.json` (legacy env-level `sandbox: true` also accepted).
+6. **Routing rule missing** — spawn mode requires the agent's governing behavior prompt (AGENTS.md, CLAUDE.md, system policy file, or equivalent) to include a HARD RULE that routes JSON-shaped `{"probe": true}` and `{"label", "taskBody"}` messages through the `refine-handler` skill. Symptom: probe returns NL text (e.g. `"✅ Alive and responsive."`) instead of `{"ok": true, ...}`. See `refine-handler.example.md` for the template text. The orchestrator cannot apply this edit — the operator must add it manually.
 
 After fixing the issue(s), tell the user: "Rerun `/refine init` (it's idempotent) or run `/refine <question>` directly — the dispatch will re-probe."
 
@@ -84,6 +96,7 @@ After fixing the issue(s), tell the user: "Rerun `/refine init` (it's idempotent
    3. Reply wrapper path in the agent's exec-approvals
    4. Reply wrapper present on disk at `spawn.replyWrapper`
    5. `capabilities.sandboxed: true` in `refine.json`
+   6. Routing rule present in the agent's governing behavior prompt — routes JSON-shaped `{"probe": true}` and `{"label", "taskBody"}` messages to `refine-handler` (operator must install manually; see `refine-handler.example.md`)
 
 ## How to Talk to the Agent
 
