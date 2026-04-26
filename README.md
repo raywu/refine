@@ -9,6 +9,7 @@ A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) slash command fo
 **Includes:**
 - **3-phase lifecycle:** Diagnose → Propose (mandatory agent review) → Present
 - **Prompt Learning Mode:** Dimension-based quality calibration from reference examples
+- **Dual independent scorer:** Runs identical scoring requests across your `dev` and `prod` environments to catch single-scorer bias before a production gate. Requires a frozen scoring rubric (typically produced by Prompt Learning Mode's dimension discovery) plus pre/post outputs to score — no harness log, CI, or repo layout assumptions
 - **Comparative Quality Review:** Systematic output comparison against gold standards
 - **Sandbox awareness:** Knows the difference between main and cron sandbox sessions
 - **Ask-first interaction:** Start with symptoms, let the agent self-diagnose

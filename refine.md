@@ -115,6 +115,36 @@ When iterating on a skill's output quality (not format/structure), use dimension
 6. **Best-of-N** — keep the SKILL.md version with the highest overall score, not the latest. If iteration N scores lower than N-1, revert.
 7. **Stop when:** all dimensions ≥ threshold (skill-specific) OR 3 iterations without improvement.
 
+**Dual independent scorer (for critical quality gates):**
+
+*Dependencies (check before running — if any are missing, stop and ask the user):*
+1. A **frozen scoring rubric** — typically the one produced by Prompt Learning Mode's dimension discovery (step 2 above). If no rubric exists, run dimension discovery first, or ask the user to supply one. Do not invent a rubric inside a scoring request.
+2. **Pre- and post-change outputs** to score. Any source works (live skill runs, saved fixtures, pasted text) — dual-scorer does not assume any harness, log file, or repo layout.
+3. **Two scorer endpoints.** Ideally `environments.dev` and `environments.prod` from `refine.json`; if only one environment (or one model) is available, see "The two scorer instances" below for the tiered fallback ladder — do not silently degrade to same-model-twice.
+
+*When to run:* The user says "dual-scorer", "PROD gate", "validate before shipping", or similar; OR the current session is validating a Prompt Learning Mode change about to be merged/shipped. Skip for exploratory iteration, format/structure-only changes, and typo fixes.
+
+*The two scorer instances — pick the strongest tier available:*
+
+Walk the list top-down and stop at the first tier the user's config supports. State which tier you used and what it does/doesn't catch, so the user knows how much weight to give the result.
+
+1. **Two distinct environments** (`environments.dev` + `environments.prod` in `refine.json`, preferably backed by different models or model versions) — full protocol; catches both systematic bias and sampling noise.
+2. **Same environment, two commands pinned to different model versions** — e.g. a second `command` template in the same environment that pins a different model than the primary. Catches family-level bias but not cross-provider bias. Use when the user has only one host configured but multiple models available on it.
+3. **Same environment, two sessions with the same model** — only catches sampling noise, not bias. Use only when the user has no way to vary the model; report clearly that systematic-bias coverage is unavailable.
+4. **Single scorer + human spot-check** — run the single-scorer flow, then ask the user to eyeball the 1–2 dimensions they care about most. Acceptable when the change is small or the user explicitly accepts reduced coverage.
+5. **Skip dual-scorer** — fall back to Prompt Learning Mode's single-scorer flow with an explicit warning that the critical-gate protocol couldn't be met. Appropriate when none of the above are available and the user is willing to proceed without the gate.
+
+If you fall back to tier 3 or weaker, ask the user before proceeding: a weak dual-scorer result can read as a strong signal if the tier isn't disclosed.
+
+*Protocol:*
+- Send identical scoring requests to both scorer instances using the same frozen rubric (e.g. the rubric produced by dimension discovery in Prompt Learning Mode, step 2)
+- Average scores across scorers for each dimension — reduces single-scorer bias
+- Re-state the frozen rubric verbatim in every scoring request (scorers drift to generic dimensions within 1-2 turns)
+- Regression gate (heuristic — tune per skill): no dimension drops more than ~0.5 from baseline average, plus absolute floors (e.g. baseline avg − 1.0, with a minimum of 2.5). If scorers disagree on direction (one says win, other says regression), treat as FAIL until the discrepancy is resolved.
+- Caveat: scorers from the same model family can share systematic bias — add periodic human calibration to catch blind spots
+
+*Output:* Present a single table with columns `Dimension | Run A (pre) avg | Run B (post) avg | Δ` (cells already averaged across scorers), a PASS/FAIL verdict, and a one-line note on whether the biggest deltas land on the targeted dimensions.
+
 **Anti-patterns learned from validation:**
 - Agent will drift from its own rubric to generic MBA dimensions (ICP Clarity, Defensibility) — always re-state the rubric when requesting scores
 - Don't batch dimension discovery + scoring in one message — discovery first, scoring second
