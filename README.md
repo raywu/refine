@@ -15,8 +15,11 @@ A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) slash command fo
 - **Comparative Quality Review:** Systematic output comparison against gold standards
 - **Sandbox awareness:** Knows the difference between main and cron sandbox sessions
 - **Ask-first interaction:** Start with symptoms, let the agent self-diagnose
+- **Skill bundle (preview):** Skill-format version staged at `skills/refine/` for early testing — auto-discovery, bundled example.json, `evals/` subdir for prompt-learning artifacts. See [Skill bundle (preview)](#skill-bundle-preview)
 
 ## Setup
+
+> **Skill preview available.** A Skill-format version of `/refine` is staged at [`skills/refine/`](skills/refine/) for early testing. It is not yet the recommended install path; the slash-command install below remains canonical until v1.0. To preview, see [Skill bundle (preview)](#skill-bundle-preview) below.
 
 Install the slash command:
 
@@ -72,6 +75,38 @@ Once configured, start a session:
 ```
 
 Claude Code sends the symptom to your agent, the agent self-diagnoses from runtime experience (e.g., "the personalization step reads from an empty user profile on first run"), and together they iterate on a fix with mandatory review rounds.
+
+## Skill bundle (preview)
+
+A Claude Code Skill version of `/refine` is staged at `skills/refine/`:
+
+```
+skills/refine/
+├── SKILL.md              # the prompt + YAML frontmatter (name + description)
+├── refine.example.json   # bundled config template
+├── LICENSE
+└── evals/                # placeholder for prompt-learning rubrics, gold/foil sets
+```
+
+**What changes vs the slash command:**
+- Skills support **auto-discovery** — Claude can offer `/refine` when you describe a matching symptom in plain conversation, without typing the slash. Explicit `/refine <symptom>` still works identically.
+- Bundled resources (example config, future rubrics) ship alongside the prompt.
+- Distribution becomes directory-based instead of single-file.
+
+**Try it (manual symlink, reversible):**
+
+```bash
+ln -s "$(pwd)/skills/refine" ~/.claude/skills/refine
+```
+
+This adds the skill alongside the existing `~/.claude/commands/refine.md`. Claude Code's resolution behavior in this coexistence state has not yet been verified — surface unexpected results before relying on the skill version. Remove with `rm ~/.claude/skills/refine`.
+
+**Roadmap:**
+- v1.0 will make the skill canonical and deprecate the slash-command path.
+- v0.x will be tagged so the slash-command install remains fetchable for rollback.
+- Migration for existing users is one of:
+  - **Direct curl users**: `rm ~/.claude/commands/refine.md && git clone https://github.com/raywu/refine ~/.claude/skills/refine` (final clone shape pending v1.0).
+  - **Dotfiles users**: a single dotfiles PR replacing the `claude/commands/refine.md` symlink with a `claude/skills/refine/` directory symlink.
 
 ## Credits
 
