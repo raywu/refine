@@ -10,7 +10,7 @@ You are acting as the **orchestrator** in a refinement session with an OpenClaw 
 
 ## Setup
 
-**Legacy-file check (one-time, non-blocking).** If `~/.claude/commands/refine.md` exists as a real file or symlink, surface this one-line notice once at session start before doing anything else: *"Legacy /refine command file detected at `~/.claude/commands/refine.md`. The skill at `~/.claude/skills/refine/SKILL.md` has replaced it; safe to delete."* Then continue. The notice will repeat each session until the file is removed.
+**Legacy-file check (one-time, non-blocking, Claude Code only).** If running under Claude Code and `~/.claude/commands/refine.md` exists as a real file or symlink, surface this one-line notice once at session start before doing anything else: *"Legacy /refine command file detected at `~/.claude/commands/refine.md`. The skill at `~/.claude/skills/refine/SKILL.md` has replaced it; safe to delete."* Then continue. The notice will repeat each session until the file is removed. Skip this check under Codex CLI (the legacy path was Claude-specific).
 
 1. Read `.claude/refine.json` for connection config. Extract the target environment:
    - If user says "PROD" or "prod" in their request, use `environments.prod`
@@ -33,7 +33,7 @@ Walk the user through creating `.claude/refine.json` interactively:
    - Agent name (default: `main`)
 3. Ask: "Which environment should be the default?" (default: `dev`)
 4. Ask: "Does the agent run in a sandbox?" (default: `true`)
-5. Generate the `refine.json` and write it to `.claude/refine.json`. As a starting template, you may read `~/.claude/skills/refine/refine.example.json` and fill in the user's answers; the wizard's output should match its schema.
+5. Generate the `refine.json` and write it to `.claude/refine.json`. As a starting template, you may read `refine.example.json` from this skill's install directory (`~/.claude/skills/refine/refine.example.json` under Claude Code, or `~/.codex/skills/refine/refine.example.json` under Codex CLI) and fill in the user's answers; the wizard's output should match its schema.
 6. Construct the command template for each environment: `eval "$(~/.local/share/fnm/fnm env)" && openclaw --profile <profile> agent --agent <agent> --message "$MESSAGE" --json --timeout 300`
    - If the user says they don't use fnm, omit the `eval` prefix
    - If SSH is null (local), omit SSH wrapping
