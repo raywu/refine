@@ -1,6 +1,6 @@
 # /refine — Claude Code ↔ OpenClaw Agent Collaboration
 
-A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) slash command for iterative skill refinement with OpenClaw agents.
+A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) Skill for iterative skill refinement with OpenClaw agents.
 
 ## What it does
 
@@ -15,21 +15,21 @@ A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) slash command fo
 - **Comparative Quality Review:** Systematic output comparison against gold standards
 - **Sandbox awareness:** Knows the difference between main and cron sandbox sessions
 - **Ask-first interaction:** Start with symptoms, let the agent self-diagnose
-- **Skill bundle (preview):** Skill-format version staged at `skills/refine/` for early testing — auto-discovery, bundled example.json, `evals/` subdir for prompt-learning artifacts. See [Skill bundle (preview)](#skill-bundle-preview)
+- **Auto-discovery:** Claude Code can offer `/refine` proactively when you describe a matching symptom in plain conversation; explicit `/refine <symptom>` always works too
 
 ## Setup
 
-> **Skill preview available.** A Skill-format version of `/refine` is staged at [`skills/refine/`](skills/refine/) for early testing. It is not yet the recommended install path; the slash-command install below remains canonical until v1.0. To preview, see [Skill bundle (preview)](#skill-bundle-preview) below.
-
-Install the slash command:
+Install the Skill (the repo IS the skill bundle):
 
 ```bash
-mkdir -p ~/.claude/commands
-curl -fsSL https://raw.githubusercontent.com/raywu/refine/main/refine.md \
-  -o ~/.claude/commands/refine.md
+git clone https://github.com/raywu/refine ~/.claude/skills/refine
 ```
 
-Or tell your coding agent: "Install `refine.md` from https://github.com/raywu/refine to `~/.claude/commands/refine.md`, then run `/refine init` in my project."
+Upgrade later:
+
+```bash
+git -C ~/.claude/skills/refine pull
+```
 
 Then in your project, create `.claude/refine.json` via **either**:
 
@@ -42,8 +42,7 @@ Walks you through the config and writes it.
 **Manual:**
 ```bash
 mkdir -p .claude
-curl -fsSL https://raw.githubusercontent.com/raywu/refine/main/refine.example.json \
-  -o .claude/refine.json
+cp ~/.claude/skills/refine/refine.example.json .claude/refine.json
 # edit .claude/refine.json to match your environment
 ```
 
@@ -52,9 +51,39 @@ Once configured, start a session:
 /refine why is my skill producing jargon-heavy output?
 ```
 
+### Why `git clone` (and not `ln -s`)
+
+Claude Code 2.1.x has a [skill discovery bug](https://github.com/anthropics/claude-code/issues/24140) that registers symlinked skills multiple times in the slash menu. We empirically reproduced it: `ln -s` produced 3–6 duplicate `/refine` entries; a real-directory copy (or `git clone`) produces exactly one. Until upstream resolves the bug, the install path must be a real directory.
+
+## Upgrading from v0.x
+
+Earlier versions installed `/refine` as a slash command at `~/.claude/commands/refine.md`. To upgrade:
+
+```bash
+rm ~/.claude/commands/refine.md
+git clone https://github.com/raywu/refine ~/.claude/skills/refine
+```
+
+That's it. Your per-project `.claude/refine.json` is unchanged — schema is identical.
+
+If you maintain a dotfiles repo that installs `~/.claude/commands/refine.md` via symlink, swap that for a `git clone`/`pull` of this repo into `~/.claude/skills/refine`.
+
+## Rollback to v0.x
+
+If the Skill conversion breaks something subtle and you need the slash-command shape back:
+
+```bash
+rm -rf ~/.claude/skills/refine
+mkdir -p ~/.claude/commands
+curl -fsSL https://raw.githubusercontent.com/raywu/refine/v0.x/refine.md \
+  -o ~/.claude/commands/refine.md
+```
+
+The `v0.x` git tag preserves the last commit where `refine.md` lived at the repo root.
+
 ## Requirements
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI or IDE extension
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI or IDE extension (2.1.x or later)
 - An [OpenClaw](https://openclaw.ai) agent accessible via SSH or locally
 - The `openclaw` CLI installed on the agent's host
 
@@ -76,37 +105,9 @@ Once configured, start a session:
 
 Claude Code sends the symptom to your agent, the agent self-diagnoses from runtime experience (e.g., "the personalization step reads from an empty user profile on first run"), and together they iterate on a fix with mandatory review rounds.
 
-## Skill bundle (preview)
+## Known limitations
 
-A Claude Code Skill version of `/refine` is staged at `skills/refine/`:
-
-```
-skills/refine/
-├── SKILL.md              # the prompt + YAML frontmatter (name + description)
-├── refine.example.json   # bundled config template
-├── LICENSE
-└── evals/                # placeholder for prompt-learning rubrics, gold/foil sets
-```
-
-**What changes vs the slash command:**
-- Skills support **auto-discovery** — Claude can offer `/refine` when you describe a matching symptom in plain conversation, without typing the slash. Explicit `/refine <symptom>` still works identically.
-- Bundled resources (example config, future rubrics) ship alongside the prompt.
-- Distribution becomes directory-based instead of single-file.
-
-**Try it (manual symlink, reversible):**
-
-```bash
-ln -s "$(pwd)/skills/refine" ~/.claude/skills/refine
-```
-
-This adds the skill alongside the existing `~/.claude/commands/refine.md`. Claude Code's resolution behavior in this coexistence state has not yet been verified — surface unexpected results before relying on the skill version. Remove with `rm ~/.claude/skills/refine`.
-
-**Roadmap:**
-- v1.0 will make the skill canonical and deprecate the slash-command path.
-- v0.x will be tagged so the slash-command install remains fetchable for rollback.
-- Migration for existing users is one of:
-  - **Direct curl users**: `rm ~/.claude/commands/refine.md && git clone https://github.com/raywu/refine ~/.claude/skills/refine` (final clone shape pending v1.0).
-  - **Dotfiles users**: a single dotfiles PR replacing the `claude/commands/refine.md` symlink with a `claude/skills/refine/` directory symlink.
+- **No `argument-hint` autocomplete affordance.** As a Skill, `/refine` doesn't yet show the inline argument hint that the v0.x slash command had. Awaiting Claude Code support for skill-level hints.
 
 ## Credits
 
